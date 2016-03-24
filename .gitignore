@@ -1,0 +1,10 @@
+logs
+*.pyc
+*.pyc
+*.pid
+*.sock
+.idea
+bin
+nohup.out
+node_modules
+env

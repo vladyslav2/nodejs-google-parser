@@ -14,6 +14,9 @@ var settings = require('./settings.js');
 
 
 var checkIfAllDomainsChecked = function() {
+  // Write pool state and close a program if all domains
+  // are checked
+
   db.collection('domains').find({'google_brand_checked': -1}).count(function(err, count) {
     if(count == 0) {
       db.collection('pools').insert({
@@ -29,6 +32,8 @@ var checkIfAllDomainsChecked = function() {
 }
 
 var getsMoreGoogleBrandDomains = function() {
+  // Get new domains for check
+
   if(gettingDomains == 0) {
     gettingDomains = 1;
     (function(gettingDomains) {
@@ -68,9 +73,10 @@ function ctext(html) {
 }
 
 var GoogleBrandSearch = function(res, proxy, attemps) {
+  // Function Will do a proxy request and check if we get correct answer 
+  // from google
 
   var proxy_array = proxy.split(':');
-  //console.log('request ', 'https://google.com/search?q=' + res.domain.split('.')[0], ' ', proxy, ' ', attemps);
 
   request.get({
     method: 'GET',
@@ -154,7 +160,7 @@ exports.run = function(mdb) {
       if(el) {
         google_brand_params = el['params'];
       }
-      // when each is finished
+      // when each was finish
       else {
         db.collection('pools').insert({
           '_cls': 'Pools', 

@@ -31,7 +31,7 @@ var GetMoreDomains = function() {
             if(settings.debug == true)
               console.log('Trying to find proxy for domain ' + el.domain);
 
-            settings.get_available_proxy(el);
+            settings.getAvailableProxy(el);
           }
           else {
             gettingDomains = 0;
@@ -70,7 +70,7 @@ var GooglePagesSearch = function(domain, proxy, attemps) {
         if(attemps > 3 || attemps == -1) { // Give 3 atterms to proxy if that was working before
           settings.badProxyLists.push( function catchedBadProxy(err, result) {
             redis_client.setex(proxy, 60*60*3, function savedBadProxy(err, result) {
-              settings.get_available_proxy(res, domainInProgress, GetMoreDomains,  GooglePagesSearch);
+              settings.getAvailableProxy(res, domainInProgress, GetMoreDomains,  GooglePagesSearch);
             })
           })
         } else {
@@ -95,7 +95,7 @@ var GooglePagesSearch = function(domain, proxy, attemps) {
           // code for google parsing
         } else {
           settings.secondaryProxyLists.push(proxy);
-          settings.get_available_proxy(domain, domainInProgress, GetMoreDomains, GooglePagesSearch);
+          settings.getAvailableProxy(domain, domainInProgress, GetMoreDomains, GooglePagesSearch);
           return 0;
         }
       }

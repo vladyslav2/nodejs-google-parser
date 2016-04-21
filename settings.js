@@ -2,17 +2,19 @@
 
 var proxy_pattern = /\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b:\d{2,5}/g
 
-var current_database = 0;
-var redis = require('redis');
-var redis_client = redis.createClient();
-var parsingProxySite = 0;
-var request = require('request');
-var ObjectId = require('mongodb').ObjectID;
-var debug = true;
-var db = null;
+var currentDatabase  = 0;
+var redis             = require('redis');
+var redis_client      = redis.createClient();
+var parsingProxySite  = 0;
+var request           = require('request');
+var ObjectId          = require('mongodb').ObjectID;
+var debug             = true;
+var debugFail         = false;
+var db                = null;
 
-var settings = {};
-settings.debug = debug;
+var settings          = {};
+settings.debug        = debug;
+settings.debugFail    = debugFail;
 
 redis_client.on("error", function (err) {
     console.log("Error " + err);
@@ -154,10 +156,10 @@ var redis_command = function(database_number, callback)  {
   for(var i = 2; i < arguments.length; i++)
     args.push(arguments[i])
 
-  if(database_number != current_database) {
+  if(database_number != currentDatabase) {
     redis_client.select(database_number, function(error, response) {
       if(error) throw error;
-      current_database = database_number;
+      currentDatabase = database_number;
       return callback.apply(redis_client, args);
     })
   }
@@ -166,42 +168,43 @@ var redis_command = function(database_number, callback)  {
   }
 }
 
-var getSecondaryProxy = function(callback, proxysite_url, attemps, get_more_domains, parsing_function) {
+var getSecondaryProxy = function(callback, proxysite_url, attemps, service) {
   secondaryProxyLists.random(function(result) {
       if(result === null) {
         notCheckedLists.random(function(result) {
           if(result === null) {
             if(attemps == 50) { throw 'No secondary proxies'; process.exit(); }
             setTimeout(function() {
-              getSecondaryProxy(callback, proxysite_url, ++attemps, get_more_domains, parsing_function);
+              getSecondaryProxy(callback, proxysite_url, ++attemps, service);
             }, 1000)
             return 0;
           } else {
-            callback(proxysite_url, result, get_more_domains, parsing_function);
+            callback(proxysite_url, result, service);
           }
         })
       } 
       else {
-        callback(proxysite_url, result, get_more_domains, parsing_function);
+        callback(proxysite_url, result, service);
       }
   })
 }
 
-var getAvailableProxy = function(res, domainInProgress, get_more_domains, parsing_function) {
+var getAvailableProxy = function(res, service) { //domainInProgress, get_more_domains, parsing_function) {
   goodProxyLists.random(function(proxy) {
     if(proxy === null) {
       notCheckedLists.random(function(proxy) {
         if(proxy !== null) {
 
-          if(settings.debug == true)
-            console.log('Found proxy in new proxy list ', proxy);
+          //if(settings.debug == true)
+          //  console.log('Found proxy in new proxy list ', proxy);
 
-          parsing_function(res, proxy, -1);
+          service.getDomainInfo(res, proxy, -1);
+          //parsing_function(res, proxy, -1);
         }  else {
-          domainInProgress.push(res);
-          parseProxySite(get_more_domains, parsing_function);
+          service.domainInProgress.push(res);
+          parseProxySite(service) //get_more_domains, parsing_function);
           setTimeout(function() { 
-            getAvailableProxy(res, domainInProgress, get_more_domains, parsing_function);
+            getAvailableProxy(res, service) //domainInProgress, get_more_domains, parsing_function);
           }, 3000);
           //domainInProgress.push(res);
         }
@@ -212,15 +215,15 @@ var getAvailableProxy = function(res, domainInProgress, get_more_domains, parsin
       if(settings.debug == true)
         console.log('Found proxy in good proxy list', proxy);
 
-      parsing_function(res, proxy, 0);
+      service.getDomainInfo(res, proxy, 0);
     }
   })
 }
 
-var parseProxySite = function(get_more_domains, parsing_function)  {
+var parseProxySite = function(service)  {
   // Will get proxy site url from database and will try
   // to parse it with parsing_function
-  // in success will run get_more_domains function
+  // in success will run service get more domains function
   // otherwise will try other proxy url after 2500 milseconds
 
   if(parsingProxySite < 1) {
@@ -239,8 +242,7 @@ var parseProxySite = function(get_more_domains, parsing_function)  {
 
             db.collection('proxylist').update({'_id': ObjectId(el['_id'])}, {'$set': {'last_grabbed': new Date()}}, function(err, res) {
               setTimeout(function() { parsingProxySite --;}, 2500);
-              //getSecondaryProxy(parseProxyUrlPage, el.proxy_url, 1, get_more_domains, parsing_function);
-              parseProxyUrlPage(el.proxy_url, '', get_more_domains, parsing_function);
+              parseProxyUrlPage(el.proxy_url, '', service);
             });
           }
           else {
@@ -251,7 +253,7 @@ var parseProxySite = function(get_more_domains, parsing_function)  {
   }
 }
 
-var parseProxyUrlPage = function (page_url, secondary_proxy, get_more_domains, parsing_function) {
+var parseProxyUrlPage = function (page_url, secondary_proxy, service) {
   var proxy_array = secondary_proxy.split(':')
 
   if(settings.debug == true)
@@ -259,12 +261,12 @@ var parseProxyUrlPage = function (page_url, secondary_proxy, get_more_domains, p
 
   request.get({
     method: 'GET',
-    uri: page_url,
-    gzip: true,
+    gzip  : true,
+    uri   : page_url,
     //proxy: {protocol: proxy_array[0] + ':', hostname: proxy_array[1], 'port': proxy_array[2]},
   }, function(error, response, body) {
     if(error) {
-      getSecondaryProxy(parseProxyUrlPage, page_url, 1, get_more_domains, parsing_function);
+      getSecondaryProxy(parseProxyUrlPage, page_url, 1, service);
       return 0;
     } else {
       secondaryProxyLists.push(secondary_proxy);
@@ -283,7 +285,7 @@ var parseProxyUrlPage = function (page_url, secondary_proxy, get_more_domains, p
           badProxyLists.exists(proxy, function(result) {
             if(result == false) {
               notCheckedLists.push(proxy);
-              get_more_domains();
+              service.getMoreDomains();
               /*
               var res = settings.domainInProgress.pop();
               if(typeof res !== 'undefined') {
@@ -311,6 +313,6 @@ exports.parseProxyUrlPage = parseProxyUrlPage
 exports.getAvailableProxy = getAvailableProxy
 exports.debug = debug
 
-exports.set_main_database = function(mdb) {
+exports.setMainDatabase = function(mdb) {
   db = mdb;
 }

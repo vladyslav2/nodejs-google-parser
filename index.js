@@ -2,12 +2,12 @@
 
 var url = 'mongodb://localhost:27017/domain';
 var MongoClient = require('mongodb').MongoClient;
+const googleBrandSearch = require('./googlebrand.js');
 
-var db = null;
-var googlebrand = require('./googlebrand.js');
-
-MongoClient.connect(url, function(err, mdb) {
+MongoClient.connect(url, function(err, db) {
   if(err) throw err;
-
-  googlebrand.run(mdb);
+  let gb = googleBrandSearch.create({
+    db: db
+  })
+  gb.getMoreDomains()
 })

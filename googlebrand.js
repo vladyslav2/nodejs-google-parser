@@ -96,7 +96,8 @@ class GoogleBrandSearch {
     for (var i = 0; i < this.googleSearchFor.length; i++) {
       var param = this.googleSearchFor[i];
 
-      if ($(param.tag + '[' + param.attribute + param.search + '="' + param.value + '"]').length != 0)
+      if ($(param.tag + '[' + param.attribute + param.search + '="' + 
+            param.value + '"]').length != 0)
         values.push(i);
     }
 

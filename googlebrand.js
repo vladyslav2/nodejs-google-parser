@@ -6,6 +6,7 @@ const cheerio = require('cheerio');
 
 class GoogleBrandSearch {
 
+  // Dependensy injection patters for db and settings object
   constructor(options) {
     this.domainInProgress = [];
     this.domainPerStep = 5000;
@@ -16,11 +17,14 @@ class GoogleBrandSearch {
     this.db = options.db;
     this.settings = options.settings;
     this.successRequestCount = 0;
+    this.googleSearchFor = [];
+    this.getCustomFlags();
+  }
 
+  getCustomFlags() {
     this.db.collection('settings').find({ name: 'google_brand_search' }, (err, cursor) => {
       if (err) throw err;
 
-      console.log('we got new search');
       cursor.each((err, el) => {
         if (err) throw err;
         if (el) {
@@ -85,14 +89,14 @@ class GoogleBrandSearch {
     }
   }
 
-  ctext(html) {
+  searchCustomFlags(html) {
     var $ = cheerio.load(html);
     var values = [];
 
     for (var i = 0; i < this.googleSearchFor.length; i++) {
       var param = this.googleSearchFor[i];
 
-      if ($('' + param.tag + '[' + param.attribute + param.search + '="' + param.value + '"]').length != 0)
+      if ($(param.tag + '[' + param.attribute + param.search + '="' + param.value + '"]').length != 0)
         values.push(i);
     }
 
@@ -149,7 +153,7 @@ class GoogleBrandSearch {
         if (response.request.host.indexOf('google') >= 0) {
           if (body.indexOf('please type the characters below') == -1) {
             var ss = 0;
-            var values = this.ctext(body);
+            var values = this.searchCustomFlags(body);
             values.map(function (el, i) { ss += Math.pow(2, el);});
 
             this.db.collection('domains').update({
@@ -192,7 +196,7 @@ class GoogleBrandSearch {
 
 function create(options) {
   // We will use factory patters with dependency injection
-  if (options.hasOwnProperty('setttings') == false) {
+  if (options.hasOwnProperty('settings') == false) {
     const settings = require('./settings.js');
     settings.setMainDatabase(options.db);
     options.settings = settings;

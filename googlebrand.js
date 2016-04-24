@@ -19,6 +19,7 @@ class GoogleBrandSearch {
     this.successRequestCount = 0;
     this.googleSearchFor = [];
     this.getCustomFlags();
+    console.log('mem usage', process.memoryUsage())
   }
 
   getCustomFlags() {
@@ -59,6 +60,7 @@ class GoogleBrandSearch {
   }
 
   getMoreDomains() {
+    console.log('mem usage get more domains ', process.memoryUsage())
     if (this.gettingDomains == 0) {
       this.gettingDomains = 1;
       this.db.collection('domains').find(
@@ -76,10 +78,8 @@ class GoogleBrandSearch {
                   return d.domain == el.domain;
                 })
               ) {
-              this.settings.getAvailableProxy(
-                el,
-                this
-              );
+              var self = this;
+              this.getProxy(el, 1100);
             }
           } else {
             this.gettingDomains = 0;
@@ -93,6 +93,7 @@ class GoogleBrandSearch {
     var $ = cheerio.load(html);
     var values = [];
 
+    console.log('mem usage search custom flags ', process.memoryUsage())
     for (var i = 0; i < this.googleSearchFor.length; i++) {
       var param = this.googleSearchFor[i];
 
@@ -104,6 +105,19 @@ class GoogleBrandSearch {
     return values;
   }
 
+  getProxy(el) {
+    var self = this;
+    this.settings.getAvailableProxy().then(function (proxy, attemps) {
+      self.getDomainInfo(el, proxy, attemps);
+    }).catch(function(err) {
+      console.error(err);
+      timer += 200;
+      setTimeout(function() {
+        self.getProxy(el, timer);
+      }, timer);
+    });
+  }
+
   getDomainInfo(res, proxy, attemps) {
 
     /* Function Will do a proxy request and check if we get correct answer 
@@ -112,6 +126,7 @@ class GoogleBrandSearch {
 
     // Our nodejs version does not allow to do this
     // const {protocol, hostname, port} = proxy.split(':');
+    console.log('mem usage get domain info ', process.memoryUsage(), 'pr ', proxy)
     const protocol = proxy.split(':')[0];
     const hostname = proxy.split(':')[1];
     const port     = proxy.split(':')[2];
@@ -121,7 +136,7 @@ class GoogleBrandSearch {
       gzip: true,
       uri: 'https://google.co.uk/search?q=' + res.domain.split('.')[0] + '&hl=en',
       jar: true,
-      proxy: { protocol: protocol + ':', hostname: hostname, port: port },
+      //proxy: { protocol: protocol + ':', hostname: hostname, port: port },
     }, (error, response, body) => {
       if (error) {
         if (this.settings.debugFail) console.log('got error for proxy ', proxy);
@@ -133,10 +148,7 @@ class GoogleBrandSearch {
             if (err) throw err;
             this.redisClient.setex(proxy, 10800, (err, result) => {
               if (err) throw err;
-              this.settings.getAvailableProxy(
-                res,
-                this
-              );
+              this.getProxy(res);
             });
           });
         } else {
@@ -184,10 +196,7 @@ class GoogleBrandSearch {
           }
         } else {
           this.settings.secondaryProxyLists.push(proxy);
-          this.settings.getAvailableProxy(
-            res,
-            this
-          );
+          this.getProxy(res, 1100);
           return 0;
         }
       }

@@ -168,59 +168,54 @@ var redis_command = function(database_number, callback)  {
   }
 }
 
-var getSecondaryProxy = function(callback, proxysite_url, attemps, service) {
+var getSecondaryProxy = function(callback, proxysite_url, attemps) {
   secondaryProxyLists.random(function(result) {
       if(result === null) {
         notCheckedLists.random(function(result) {
           if(result === null) {
             if(attemps == 50) { throw 'No secondary proxies'; process.exit(); }
             setTimeout(function() {
-              getSecondaryProxy(callback, proxysite_url, ++attemps, service);
+              getSecondaryProxy(callback, proxysite_url, ++attemps);
             }, 1000)
             return 0;
           } else {
-            callback(proxysite_url, result, service);
+            callback(proxysite_url, result);
           }
         })
       } 
       else {
-        callback(proxysite_url, result, service);
+        callback(proxysite_url, result);
       }
   })
 }
 
-var getAvailableProxy = function(res, service) { //domainInProgress, get_more_domains, parsing_function) {
-  goodProxyLists.random(function(proxy) {
-    if(proxy === null) {
-      notCheckedLists.random(function(proxy) {
-        if(proxy !== null) {
+var getAvailableProxy = function() { //domainInProgress, get_more_domains, parsing_function) {
+  return new Promise(function(resolve, reject) {
+    goodProxyLists.random(function(proxy) {
+      if(proxy === null) {
+        notCheckedLists.random(function(proxy) {
+          if(proxy !== null) {
+            //if(settings.debug == true)
+            //  console.log('Found proxy in new proxy list ', proxy);
+            resolve(proxy, -1)
+          }  else {
+            parseProxySite() 
+            reject('Unable to get proxy in that time, will search for new proxies');
+          }
+        })
+      }
+      else {
 
-          //if(settings.debug == true)
-          //  console.log('Found proxy in new proxy list ', proxy);
+        if(settings.debug == true)
+          console.log('Found proxy in good proxy list', proxy);
 
-          service.getDomainInfo(res, proxy, -1);
-          //parsing_function(res, proxy, -1);
-        }  else {
-          service.domainInProgress.push(res);
-          parseProxySite(service) //get_more_domains, parsing_function);
-          setTimeout(function() { 
-            getAvailableProxy(res, service) //domainInProgress, get_more_domains, parsing_function);
-          }, 3000);
-          //domainInProgress.push(res);
-        }
-      })
-    }
-    else {
-
-      if(settings.debug == true)
-        console.log('Found proxy in good proxy list', proxy);
-
-      service.getDomainInfo(res, proxy, 0);
-    }
+        resolve(proxy, 0)
+      }
+    })
   })
 }
 
-var parseProxySite = function(service)  {
+var parseProxySite = function()  {
   // Will get proxy site url from database and will try
   // to parse it with parsing_function
   // in success will run service get more domains function
@@ -242,7 +237,7 @@ var parseProxySite = function(service)  {
 
             db.collection('proxylist').update({'_id': ObjectId(el['_id'])}, {'$set': {'last_grabbed': new Date()}}, function(err, res) {
               setTimeout(function() { parsingProxySite --;}, 2500);
-              parseProxyUrlPage(el.proxy_url, '', service);
+              parseProxyUrlPage(el.proxy_url, '');
             });
           }
           else {
@@ -253,7 +248,7 @@ var parseProxySite = function(service)  {
   }
 }
 
-var parseProxyUrlPage = function (page_url, secondary_proxy, service) {
+var parseProxyUrlPage = function (page_url, secondary_proxy) {
   var proxy_array = secondary_proxy.split(':')
 
   if(settings.debug == true)
@@ -266,12 +261,12 @@ var parseProxyUrlPage = function (page_url, secondary_proxy, service) {
     //proxy: {protocol: proxy_array[0] + ':', hostname: proxy_array[1], 'port': proxy_array[2]},
   }, function(error, response, body) {
     if(error) {
-      getSecondaryProxy(parseProxyUrlPage, page_url, 1, service);
+      getSecondaryProxy(parseProxyUrlPage, page_url, 1);
       return 0;
     } else {
-      secondaryProxyLists.push(secondary_proxy);
+      //secondaryProxyLists.push(secondary_proxy);
       var ips = body.match(proxy_pattern);
-      if(settings.debut == true) {
+      if(settings.debug == true) {
         if(ips) 
           console.log(page_url, ' ips count: ', ips.length);
         else console.log(page_url, 'ips count:', 0);
@@ -285,7 +280,6 @@ var parseProxyUrlPage = function (page_url, secondary_proxy, service) {
           badProxyLists.exists(proxy, function(result) {
             if(result == false) {
               notCheckedLists.push(proxy);
-              service.getMoreDomains();
               /*
               var res = settings.domainInProgress.pop();
               if(typeof res !== 'undefined') {
